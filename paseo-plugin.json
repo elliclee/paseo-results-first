@@ -1,6 +1,6 @@
 {
   "id": "paseo-results-first",
-  "name": "Paseo · 结果优先",
+  "name": "Paseo · 额度快照",
   "requirements": {
     "paseo": ">=0.11.4 <0.11.5"
   },

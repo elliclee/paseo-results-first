@@ -1,75 +1,59 @@
-# Paseo · 结果优先
+# Paseo · 额度快照
 
-少看过程，突出结果。每轮的工具调用和思考默认收起为一个「查看过程」入口，进度播报与最终回复继续使用 Paseo 原生展示。
-
-这是基于 [Better Paseo](https://github.com/RoundRedDot/better-paseo) 的独立试用版，加入整轮折叠与回复后的额度快照。
-
-## 安装
-
-首版限定 **Paseo 0.11.4**；实际界面验证环境为 macOS 桌面端。运行 Paseo daemon 的机器需要 Git、Node.js 22 或更高版本和 npm，安装时会自动准备依赖。
-
-```sh
-paseo plugin install git:elliclee/paseo-results-first --ref v0.1.1
-```
-
-也可在「设置 → 插件」的安装入口输入 `git:elliclee/paseo-results-first`。
-
-如果已启用原版 Better Paseo，请先停用，避免多个插件同时修改时间线：
-
-```sh
-paseo plugin disable better-paseo
-```
-
-同样请先停用其他整轮折叠插件。独立插件 ID 为 `paseo-results-first`，不覆盖原版安装。
-
-安装后默认启用「结果优先」。在插件设置中关闭这个开关，可以使用继承自 Better Paseo 的详细卡片模式。
-
-## 展示效果
-
-- 每轮只有正文中的一个过程入口，点击原位展开、再点收起。
-- 用户提问、进度播报和最终回复保持原生展示，保留 Markdown、图表、图片、文件链接及原生操作。
-- 待回答问题、权限请求及会话错误保持可见；运行中自行处理的命令失败记录收在过程内。
-- 工具与思考统一收进「正在处理…」入口；进度播报中的参数、测试数量和风险说明始终可见，完成后继续保留，不重复收入过程。
-- 字体和字号跟随 Paseo。
-
-在新完成回复的耗时后追加额度快照，例如：
+只在 Paseo 原生回复的耗时后追加 provider 剩余额度，例如：
 
 ```text
 工作了15m 19s，weekly 剩余 76% · resets 5d
 ```
 
-这里显示订阅额度剩余百分比。每条新完成回复首次展示时读取一次并保存在本机；没有定时检查，重载后复用原值，启用前没有快照的历史不补填。`resets` 保留抓取时的倒计时。
+**从 0.2.0 起仅保留额度功能。** 思考、命令、工具、进度、回复、字体和设置均使用 Paseo 原生展示。早期版本的过程折叠与样式增强不再加载；仓库和插件 ID 保持不变，方便已有用户更新。
 
-目前优先显示周额度，Codex 已实测；Claude 的周额度格式兼容，但尚未进行真实账号验证。额度读取失败或无法识别时省略这段文字。
+## 安装与更新
 
-额度追加依赖 Paseo 0.11.4 桌面的内部结构，并非公开 SDK 接口。移动端不显示额度；Windows、Linux 和移动端的界面行为尚未实测。升级 Paseo 后需要重新适配，因此首版限制宿主版本。
+适用于 **Paseo 0.11.4**，实际验证环境为 macOS 桌面端。daemon 所在机器需要 Git、Node.js 22 或更高版本和 npm，安装时自动准备依赖。
 
-## 更新与停用
+```sh
+paseo plugin install git:elliclee/paseo-results-first --ref v0.2.0
+```
+
+也可在「设置 → 插件」的安装入口输入 `git:elliclee/paseo-results-first`。
+
+已安装本插件的用户运行：
 
 ```sh
 paseo plugin update paseo-results-first
 ```
 
-安装时的 `--ref` 选择初始版本，后续更新会由 Paseo 展示候选修订，确认后应用。
+按 Paseo 提示应用候选更新。插件 ID 仍为 `paseo-results-first`，显示名称改为「Paseo · 额度快照」。本插件没有外观设置页。如果另外安装了 Better Paseo 或其他样式插件，须停用它们，才能得到完整的原生展示。
+
+## 额度快照
+
+- 每条新完成回复首次展示时读取一次，保存在本机；没有定时检查。
+- 重载后复用原快照；启用前没有快照的旧历史不补填。`resets` 保留抓取时的倒计时。
+- 优先显示周额度，显示的是**剩余**百分比；只有已用值时按 `100 - usedPct` 换算。
+- 只读取当前回复所属会话的 provider 额度；不可用、过期或无法明确区分账号时省略额度。
+- 已有快照继续复用，文字格式、百分比空格保持不变。
+
+Codex 已实测；Claude 的周额度格式兼容，但尚未进行真实账号验证。额度追加依赖 Paseo 0.11.4 桌面的内部结构，并非公开 SDK 接口。移动端不显示额度；Windows、Linux 尚未实测。升级 Paseo 后需要重新适配，因此当前限制宿主版本。
+
+停用或卸载：
 
 ```sh
 paseo plugin disable paseo-results-first
 paseo plugin remove paseo-results-first
 ```
 
-如果要恢复原版，停用本插件后再启用 `better-paseo`。
-
 ## 开发与来源
 
 ```sh
-npm ci --ignore-scripts
-npm test -- --maxWorkers=2
+npm ci --include=dev --ignore-scripts
+npm test -- test/unit/quota.test.ts test/unit/quota-only-entry.test.ts
 npm run typecheck
 npm run check:hermes
 ```
 
-依赖安装属于发布准备；插件由 Paseo 编译，无需另行打包桌面应用。
+入口仅加载 `client/quota`。其余早期外观代码保留为历史参考，不参与当前插件运行。插件由 Paseo 编译，无需另行打包桌面应用。维护说明见 [仅保留额度](docs/quota-only.md)。
 
-本项目保留 Better Paseo 的原有 MIT 许可及署名。原始项目为 [ABorakati/beautiful-chat](https://github.com/ABorakati/beautiful-chat)，本版本基于 RoundRedDot/better-paseo 的 `008fbfd` 源码快照继续修改。整轮折叠基于 [Daaaaave/paseo-fold-turns](https://github.com/Daaaaave/paseo-fold-turns)，详见 [第三方说明](docs/third-party/paseo-fold-turns.md)、[LICENSE](LICENSE) 和 [NOTICE](NOTICE)。
+早期版本基于 [RoundRedDot/better-paseo](https://github.com/RoundRedDot/better-paseo) 的 `008fbfd` 源码快照，原始项目为 [ABorakati/beautiful-chat](https://github.com/ABorakati/beautiful-chat)。历史折叠实现来源为 [Daaaaave/paseo-fold-turns](https://github.com/Daaaaave/paseo-fold-turns)。保留原有 MIT 署名，详见 [LICENSE](LICENSE)、[NOTICE](NOTICE) 和 [第三方说明](docs/third-party/paseo-fold-turns.md)。
 
-问题与安装失败可在本仓库 Issues 反馈；请附 Paseo 版本及脱敏后的 `paseo plugin logs paseo-results-first` 输出。
+安装或额度问题可在本仓库 Issues 反馈；请附 Paseo 版本及脱敏后的 `paseo plugin logs paseo-results-first` 输出。

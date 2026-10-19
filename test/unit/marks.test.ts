@@ -1,3 +1,4 @@
+// Historical presentation helpers; the quota-only entry no longer loads them.
 /**
  * Brand marks live on the daemon, not in the client bundle the host sends again
  * on every reconnect. A row asks for its mark by id; the marks a freshly
@@ -15,9 +16,7 @@ import {
   setMarkLoader,
   useMarkBitmap,
 } from "../../client/components/marks";
-import contribute from "../../index.server";
 import { MARK_BITMAPS } from "../../server/mark-bitmaps";
-import { markBitmapsRpc } from "../../shared/mark-rpc";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -94,21 +93,6 @@ describe("brand marks", () => {
     const second = await render(["devicon:go"]);
     expect(second.get("devicon:go")).toBe(MARK_BITMAPS["devicon:go"]);
     expect(load).not.toHaveBeenCalled();
-  });
-
-  it("are answered by the daemon for known ids only", async () => {
-    const handlers = new Map<string, (input: unknown) => Promise<unknown>>();
-    contribute({
-      registerSettings() {},
-      handle(contract: { name: string }, handler: (input: unknown) => Promise<unknown>) {
-        handlers.set(contract.name, handler);
-      },
-    } as never);
-    const handler = handlers.get(markBitmapsRpc.name)!;
-    const out = markBitmapsRpc.output.parse(
-      await handler(markBitmapsRpc.input.parse({ ids: ["brand:git", "toString", "nope"] })),
-    );
-    expect(out.bitmaps).toEqual({ "brand:git": MARK_BITMAPS["brand:git"] });
   });
 
   it("stay out of the client bundle", () => {

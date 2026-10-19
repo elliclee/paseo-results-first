@@ -1,8 +1,8 @@
 {
   "name": "paseo-results-first",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
-  "description": "Paseo 结果优先：每轮过程默认折叠，保留原生回复，并显示额度快照。",
+  "description": "在 Paseo 原生回复耗时后显示 provider 额度快照。",
   "license": "MIT",
   "scripts": {
     "typecheck": "tsc --noEmit",
