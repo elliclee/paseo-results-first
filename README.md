@@ -1,19 +1,21 @@
 # Paseo · 额度快照
 
-只在 Paseo 原生回复的耗时后追加 provider 剩余额度，例如：
+在 Paseo 原生回复的耗时后追加 provider 剩余额度，并隐藏 Thinking 整行，例如：
 
 ```text
 工作了15m 19s，weekly 剩余 76% · resets 5d
 ```
 
-**从 0.2.0 起仅保留额度功能。** 思考、命令、工具、进度、回复、字体和设置均使用 Paseo 原生展示。早期版本的过程折叠与样式增强不再加载；仓库和插件 ID 保持不变，方便已有用户更新。
+**从 0.2.1 起保留额度快照，并隐藏 Thinking。** Thinking 条目在排版前移除，连同行高一起去掉；流式和完成状态均生效。工具提示、进度文字、回复、字体和设置均使用 Paseo 原生展示。仅改变展示，不改变模型的推理设置。
+
+早期版本的整轮折叠与样式增强不再加载；仓库和插件 ID 保持不变，方便已有用户更新。
 
 ## 安装与更新
 
 适用于 **Paseo 0.11.4**，实际验证环境为 macOS 桌面端。daemon 所在机器需要 Git、Node.js 22 或更高版本和 npm，安装时自动准备依赖。
 
 ```sh
-paseo plugin install git:elliclee/paseo-results-first --ref v0.2.0
+paseo plugin install git:elliclee/paseo-results-first --ref v0.2.1
 ```
 
 也可在「设置 → 插件」的安装入口输入 `git:elliclee/paseo-results-first`。
@@ -52,7 +54,7 @@ npm run typecheck
 npm run check:hermes
 ```
 
-入口仅加载 `client/quota`。其余早期外观代码保留为历史参考，不参与当前插件运行。插件由 Paseo 编译，无需另行打包桌面应用。维护说明见 [仅保留额度](docs/quota-only.md)。
+入口只追加额度和注册一个 reasoning 过滤器，不注册自定义渲染器或设置页。Thinking 返回零条目，不产生空白占位；正文中提及 Thinking 不受影响。其余早期外观代码保留为历史参考，不参与当前插件运行。插件由 Paseo 编译，无需另行打包桌面应用。维护说明见 [隐藏 Thinking](docs/hide-thinking.md)；[仅保留额度](docs/quota-only.md) 记录 0.2.0 的改动。
 
 早期版本基于 [RoundRedDot/better-paseo](https://github.com/RoundRedDot/better-paseo) 的 `008fbfd` 源码快照，原始项目为 [ABorakati/beautiful-chat](https://github.com/ABorakati/beautiful-chat)。历史折叠实现来源为 [Daaaaave/paseo-fold-turns](https://github.com/Daaaaave/paseo-fold-turns)。保留原有 MIT 署名，详见 [LICENSE](LICENSE)、[NOTICE](NOTICE) 和 [第三方说明](docs/third-party/paseo-fold-turns.md)。
 
