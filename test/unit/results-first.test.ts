@@ -32,22 +32,46 @@ describe("results-first turn projection", () => {
     expect(roles.has(itemKey(source[0]!)!)).toBe(false);
   });
 
-  it("folds settled steps during work while preserving the newest reply and active tools", () => {
+  it("folds live tools and progress into the same running disclosure", () => {
     const rows = entries([...source.slice(0, -1), { type: "tool_call", callId: "active", name: "exec_command", status: "running" }]);
     const index = indexTurns("agent", "epoch", rows, { ...idle, running: true, activeTurnId: "turn" });
     const group = index.groups[0]!;
     expect(group.running).toBe(true);
-    expect(summary(group, "zh")).toBe("正在处理 · 4 项");
+    expect(summary(group, "zh")).toBe("正在处理 · 6 项");
     const roles = projectIndexes([index], new Set());
-    expect(roles.has("t:active")).toBe(false);
-    expect(roles.has("a:progress")).toBe(false);
+    expect(roles.get("t:active")?.hidden).toBe(true);
+    expect(roles.get("a:progress")?.anchors).toHaveLength(1);
+    expect([...roles.values()].flatMap(role => role.anchors)).toHaveLength(1);
     expect(roles.get("t:call-0")?.hidden).toBe(true);
     expect(processRows("agent", "epoch", rows, group).map(row => itemKey(row.item))).toEqual(group.keys);
   });
 
-  it("does not guess away a streaming final answer", () => {
+  it("holds streaming text in the process and releases the native final answer on completion", () => {
     const index = indexTurns("agent", "epoch", entries(source), { ...idle, running: true });
-    expect(projectIndexes([index], new Set()).has("a:final")).toBe(false);
+    expect(projectIndexes([index], new Set()).get("a:final")?.hidden).toBe(true);
+    expect(projectIndexes([indexTurns("agent", "epoch", entries(source), idle)], new Set()).has("a:final")).toBe(false);
+  });
+
+  it("keeps failed command details inside the process while the agent continues", async () => {
+    const failed: Item = { type: "tool_call", callId: "failure", name: "shell", status: "failed", error: "exit 1" };
+    const rows = entries([...source.slice(0, -1), failed, source.at(-1)!]);
+    const index = indexTurns("agent", "epoch", rows, { ...idle, running: true });
+    const group = index.groups[0]!;
+    expect(projectIndexes([index], new Set()).get("t:failure")?.hidden).toBe(true);
+    expect(processRows("agent", "epoch", rows, group).some(row => row.item.callId === "failure")).toBe(true);
+    let transform!: (input: { item: Item; phase: string }) => unknown;
+    const runtime = createTurnRuntime({ rpc: async () => ({ status: "ok", ...index }),
+      addTimelineTransformer: (value: { query: { itemType: string }; transform: typeof transform }) => {
+        if (value.query.itemType === "tool_call") transform = value.transform;
+        return () => {};
+      },
+    } as unknown as Parameters<typeof createTurnRuntime>[0]);
+    expect(transform({ item: failed, phase: "complete" })).toMatchObject({ items: [{ kind: "turn-bootstrap" }] });
+    await runtime.refresh("agent");
+    expect(transform({ item: failed, phase: "complete" })).toEqual({ items: [] });
+    runtime.toggle(group.id);
+    expect(transform({ item: failed, phase: "complete" })).toBeUndefined();
+    runtime.dispose();
   });
 
   it("folds completed checklists and can recover their contents when expanded", () => {
@@ -69,7 +93,7 @@ describe("results-first turn projection", () => {
     expect(indexTurns("agent", "epoch", entries([...source.slice(0, -1), { type: "tool_call", callId: "stale", status: "running" }, source.at(-1)!]), idle).groups).toEqual([]);
   });
 
-  it.each(["request_user_input", "AskUserQuestion", "ExitPlanMode"])("keeps decision tool %s visible", name => {
+  it.each(["request_user_input", "functions.request_user_input_async", "AskUserQuestion", "ExitPlanMode"])("keeps decision tool %s visible", name => {
     const index = indexTurns("agent", "epoch", entries([...source.slice(0, -1), { type: "tool_call", callId: "decision", name, status: "completed" }, source.at(-1)!]), idle);
     expect(projectIndexes([index], new Set()).has("t:decision")).toBe(false);
   });
@@ -89,8 +113,9 @@ describe("results-first turn projection", () => {
     expect(projectIndexes([first, second], new Set()).size).toBe(0);
     const next = entries([{ type: "user_message", text: "下一轮" }, { type: "tool_call", callId: "next", status: "running" }], "next", 20);
     const index = indexTurns("one", "epoch", [...entries(source), ...next], { ...idle, running: true, activeTurnId: "next" });
-    expect(index.groups).toHaveLength(1);
+    expect(index.groups).toHaveLength(2);
     expect(index.groups[0]?.running).toBeUndefined();
+    expect(index.groups[1]?.running).toBe(true);
   });
 });
 
@@ -98,8 +123,6 @@ describe("results-first runtime", () => {
   it.each([
     { type: "tool_call", callId: "question", name: "request_user_input", status: "completed" },
     { type: "tool_call", callId: "permission", name: "execute", detail: { type: "user_questions" } },
-    { type: "tool_call", callId: "failure", name: "execute", status: "failed" },
-    { type: "tool_call", callId: "active", name: "execute", status: "running" },
   ])("keeps actionable source %j native before the first index loads", item => {
     let transform!: (input: { item: Item; phase: string }) => unknown;
     const runtime = createTurnRuntime({ addTimelineTransformer: (value: { query: { itemType: string }; transform: typeof transform }) => {
@@ -160,7 +183,7 @@ describe("results-first runtime", () => {
     } } as unknown as Parameters<typeof createTurnRuntime>[0]);
     await runtime.refresh("agent");
     expect(transforms.get("assistant_message")!.transform({ item: source.at(-1)!, phase: "complete" })).toBeUndefined();
-    expect(transforms.get("reasoning")!.transform({ item: source[2]!, phase: "streaming" })).toBeUndefined();
+    expect(transforms.get("reasoning")!.transform({ item: source[2]!, phase: "streaming" })).toEqual({ items: [] });
     expect(transforms.get("tool_call")!.transform({ item: source[3]!, phase: "complete" })).toEqual({ items: [] });
     runtime.toggle(index.groups[0]!.id);
     expect(transforms.get("tool_call")!.transform({ item: source[3]!, phase: "complete" })).toBeUndefined();

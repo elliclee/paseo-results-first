@@ -1,5 +1,5 @@
 import type { PluginHandlerContext } from "@getpaseo/plugin/server";
-import { entryKey, indexTurns, projectIndexes, type Entry } from "../../shared/results-first/model";
+import { indexTurns, projectIndexes, type Entry } from "../../shared/results-first/model";
 import { PAGE_SIZE, processRecord, processRows } from "../../shared/results-first/process";
 import type { ProcessItem, ProcessPage } from "../../shared/results-first/contracts";
 import { parseMarkdown } from "./markdown";
@@ -55,12 +55,6 @@ async function fetchIndexedUncached(agentId: string, paseo: PluginHandlerContext
       pending: !!current.pendingPermissions?.length,
       failed: current.status === "error", hasOlder: page.hasOlder,
     });
-    // While history grows, keep the latest observed row native without unfolding
-    // earlier proven turns. A retry after completion classifies the trailing turn.
-    for (const entry of latest.entries) {
-      const key = entryKey(agentId, entry as unknown as Entry);
-      if (changedDuringRead && key && !indexed.protected.includes(key)) indexed.protected.push(key);
-    }
     return { indexed, entries: entries as unknown as Entry[] };
 }
 

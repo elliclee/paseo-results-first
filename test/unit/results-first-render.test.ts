@@ -107,7 +107,7 @@ describe("results-first disclosure", () => {
     await Promise.resolve();
     const tool = () => transforms.get("tool_call")!.transform({ item: rows[1]!.item, phase: "complete" });
     const final = () => transforms.get("assistant_message")!.transform({ item: rows[2]!.item, phase: "complete" });
-    expect(final()).toBeUndefined();
+    expect(final()).toMatchObject({ items: [{ kind: "turn-bootstrap" }] });
     const bootstrap = tool()!.items[0]!;
     expect(bootstrap).toMatchObject({ kind: "turn-bootstrap" });
     const props = { agentId: "a", timestamp: new Date(1000), host: { id: "local", label: "Local" },
@@ -153,7 +153,7 @@ describe("results-first disclosure", () => {
     const source = { type: "tool_call", callId: "first", name: "read_file", status: "completed" };
     const item = transforms.get("tool_call")!.transform({ item: source, phase: "complete" })!.items[0];
     try {
-      await act(async () => { renderer = TestRenderer.create(React.createElement(Bootstrap, { agentId: "a", item })); });
+      await act(async () => { renderer = TestRenderer.create(React.createElement(Bootstrap, { agentId: "a", timestamp: new Date(1000), item })); });
       expect(transforms.get("tool_call")!.transform({ item: source, phase: "complete" })).toBeUndefined();
       expect(renderer!.toJSON()).toBeNull();
     } finally { stop(); }

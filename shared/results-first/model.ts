@@ -15,7 +15,7 @@ export interface Group {
   tools: number; messages: number; thinking: number; compactions: number; kinds: string[];
   markers: { key: string; at: number; signature: string }[];
 }
-export interface TurnIndex { agentId: string; epoch: string; groups: Group[]; protected: string[] }
+export interface TurnIndex { agentId: string; epoch: string; groups: Group[]; protected: string[]; from?: number }
 export type DisplayGroup = Omit<Group, "anchor" | "keys" | "markers">;
 export interface CompactionTarget {
   key: string; agentId: string; at: number; hidden: boolean;
@@ -101,9 +101,11 @@ export function turnSegments(entries: Entry[]): Entry[][] {
   return segments;
 }
 
-/** Final answers and live output retain native rendering; settled process can fold. */
+/** Keep live process behind one disclosure; release only the completed final reply. */
 export function indexTurns(agentId: string, epoch: string, entries: Entry[], state: { running: boolean; activeTurnId?: string | null; pending: boolean; failed: boolean; hasOlder: boolean }): TurnIndex {
   const result: TurnIndex = { agentId, epoch, groups: [], protected: [] };
+  const from = Date.parse(entries[0]?.timestamp ?? "");
+  if (Number.isFinite(from)) result.from = from;
   const keyOf = (entry: Entry) => entryKey(agentId, entry);
   const markerKeys = new Set<string>();
   for (const entry of entries) if (entry.item.type === "compaction") {
@@ -124,15 +126,15 @@ export function indexTurns(agentId: string, epoch: string, entries: Entry[], sta
       for (const row of rows) { const key = keyOf(row); if (key) result.protected.push(key); }
       continue;
     }
-    // While running, the newest assistant text may already be the answer.
-    // Running tools and the tail row are also left visible. No text heuristic
-    // decides that an active response is "only" a progress message.
+    // Live text stays in the same process group from its first appearance.
+    // Once the turn finishes, only its final message is released natively.
     const candidates = busy ? rows : rows.slice(0, final);
-    const process = candidates.filter((row, index) => {
-      const keepLive = busy && (index === rows.length - 1 || row.item.type === "tool_call" && row.item.status === "running" || index === final);
-      const decision = row.item.type === "tool_call" && (/^(?:ask(?:_user_question)?|askuserquestion|request_user_input|exitplanmode|enterplanmode)$/i.test(row.item.name ?? "") ||
+    const process = candidates.filter(row => {
+      const decision = row.item.type === "tool_call" && (/(?:^|[._:/-])(?:ask(?:_user_question)?|askuserquestion|request_user_input(?:_async)?|exitplanmode|enterplanmode)$/i.test(row.item.name ?? "") ||
         (row.item.detail as { type?: string } | undefined)?.type === "user_questions");
-      return keyOf(row) && !keepLive && !decision;
+      // A command failure is process detail while the agent continues.
+      // Actual turn errors, blocked permissions and failed agents stay native above.
+      return keyOf(row) && !decision;
     });
     const folded = new Set(process);
     for (const row of rows) if (!folded.has(row)) { const key = keyOf(row); if (key) result.protected.push(key); }

@@ -24,7 +24,7 @@ export function createQuotaStore(
     let saved: string | null = null;
     try { saved = storage?.getItem(id) ?? null; } catch { /* Storage may be disabled. */ }
     if (saved?.startsWith(SNAPSHOT_PREFIX) && saved.length < 256) {
-      values.set(id, saved.slice(SNAPSHOT_PREFIX.length).replace(/剩余(?=\d)/, "剩余 "));
+      values.set(id, saved.slice(SNAPSHOT_PREFIX.length).replace(/\u5269\u4f59(?=\d)/, "剩余 "));
       return;
     }
     values.set(id, null);

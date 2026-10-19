@@ -17,19 +17,25 @@ export default function contribute(client: PluginClientContext) {
   const pending = new Map<string, ReturnType<typeof setTimeout>>();
   const states = new Map<string, string>();
 
-  function Observer({ agentId, sourceKey }: { agentId: string; sourceKey?: string }) {
+  function Observer({ agentId, sourceKey, at }: { agentId: string; sourceKey?: string; at?: number }) {
     useEffect(() => {
-      if (sourceKey) runtime.noteSource(agentId, sourceKey);
+      if (sourceKey) runtime.noteSource(agentId, sourceKey, at);
       viewed.add(agentId);
       let slot = mounted.get(agentId);
-      if (slot) { slot.count++; if (sourceKey) void runtime.refresh(agentId); }
+      if (slot) { slot.count++; if (sourceKey && !runtime.getIndex(agentId)) void runtime.refresh(agentId); }
       else { slot = { count: 1, release: runtime.mount(agentId) }; mounted.set(agentId, slot); }
       return () => { if (--slot.count === 0) { slot.release(); mounted.delete(agentId); } };
-    }, [agentId, sourceKey]);
+    }, [agentId, sourceKey, at]);
     return <PreferenceSyncSlot/>;
   }
+  function Bootstrap(props: PluginTimelineItemProps<z.output<typeof bootstrapSchema>>) {
+    const group = runtime.getIndex(props.agentId)?.groups.find(group => group.at === props.timestamp.getTime());
+    return <><Observer agentId={props.agentId} sourceKey={props.item.data.key} at={props.timestamp.getTime()}/>
+      {group && <TurnDisclosure {...props} runtime={runtime} item={{ type: "plugin", kind: "turn-disclosure", version: 1,
+        data: { key: props.item.data.key, source: props.item.data.source ?? "", anchors: [{ agentId: props.agentId, group, expanded: runtime.isExpanded(group.id) }] } }}/>}</>;
+  }
   const removeBootstrap = client.addTimelineRenderer({ kind: "turn-bootstrap", version: 1, schema: bootstrapSchema,
-    Component: ({ agentId, item }: PluginTimelineItemProps<z.output<typeof bootstrapSchema>>) => <Observer agentId={agentId} sourceKey={item.data.key}/> });
+    Component: Bootstrap });
   const removeDisclosure = client.addTimelineRenderer({ kind: "turn-disclosure", version: 1, schema: rowSchema,
     Component: (props: PluginTimelineItemProps<z.output<typeof rowSchema>>) => <><Observer agentId={props.agentId}/><TurnDisclosure {...props} runtime={runtime}/></> });
   const removeCompaction = client.addTimelineRenderer({ kind: "turn-compaction", version: 1, schema: compactionSchema,

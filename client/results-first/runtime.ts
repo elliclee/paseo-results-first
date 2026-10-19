@@ -10,7 +10,7 @@ export interface TurnRuntime {
   mount(agentId: string): () => void;
   refresh(agentId: string): Promise<void>;
   getIndex(agentId: string): TurnIndex | undefined;
-  noteSource(agentId: string, key: string): void;
+  noteSource(agentId: string, key: string, at?: number): void;
   toggle(groupId: string, around?: (change: NativeFoldChange) => (finish?: boolean) => void): void;
   isExpanded(groupId: string): boolean;
   subscribe(groupId: string, listener: () => void): () => void;
@@ -30,7 +30,7 @@ export function createTurnRuntime(client: PluginClientContext, inline = false): 
   const listeners = new Map<string, Set<() => void>>();
   const processCache = new Map<string, {page: ProcessPage; size: number}>();
   const processLoading = new Map<string, Promise<ProcessPage>>();
-  const sourceAgents = new Map<string, string>();
+  const sourceAgents = new Map<string, { agentId: string; at?: number }>();
   const unavailableSources = new Set<string>();
   let registrations: (() => void | Promise<void>)[] = [];
   let cancelViewportAnchor: ((finish?: boolean) => void) | undefined;
@@ -90,8 +90,9 @@ export function createTurnRuntime(client: PluginClientContext, inline = false): 
         if (disposed) return;
         if (index.status !== "ok") { unavailable(agentId); return; }
         const indexed = new Set([...index.protected, ...index.groups.flatMap(group => group.keys)]);
-        for (const [key, owner] of sourceAgents) if (owner === agentId) {
-          if (indexed.has(key)) unavailableSources.delete(key); else unavailableSources.add(key);
+        for (const [key, owner] of sourceAgents) if (owner.agentId === agentId) {
+          if (indexed.has(key) || owner.at !== undefined && (index.from === undefined || owner.at >= index.from)) unavailableSources.delete(key);
+          else unavailableSources.add(key);
         }
         if (JSON.stringify(indexes.get(agentId)) === JSON.stringify(index)) return;
         const previous = indexes.get(agentId);
@@ -120,7 +121,7 @@ export function createTurnRuntime(client: PluginClientContext, inline = false): 
   }
   function unavailable(agentId: string): void {
     indexes.delete(agentId);
-    for (const [key, owner] of sourceAgents) if (owner === agentId) unavailableSources.add(key);
+    for (const [key, owner] of sourceAgents) if (owner.agentId === agentId) unavailableSources.add(key);
     rebuild();
   }
   function toggle(groupId: string, around?: (change: NativeFoldChange) => (finish?: boolean) => void): void {
@@ -159,10 +160,9 @@ export function createTurnRuntime(client: PluginClientContext, inline = false): 
       // Each registration closes over an immutable snapshot, so host memoization
       // is invalidated through the public registration lifecycle when roles change.
       transform: ({ item, phase }: { item: Item; phase: "streaming" | "complete" }) => {
-        if (phase === "streaming") return undefined;
-        const decision = item.type === "tool_call" && (/^(?:ask(?:_user_question)?|askuserquestion|request_user_input|exitplanmode|enterplanmode)$/i.test(item.name ?? "") ||
+        const decision = item.type === "tool_call" && (/(?:^|[._:/-])(?:ask(?:_user_question)?|askuserquestion|request_user_input(?:_async)?|exitplanmode|enterplanmode)$/i.test(item.name ?? "") ||
           (item.detail as { type?: string } | undefined)?.type === "user_questions");
-        if (decision || item.error || item.status === "failed" || item.status === "error" || item.type === "tool_call" && item.status === "running") return undefined;
+        if (decision) return undefined;
         if (item.type === "compaction") {
           const targets = compactions.get(compactionSignature(item));
           if (!targets?.length || targets.every(target => !target.hidden && !target.anchors.length)) return undefined;
@@ -175,9 +175,12 @@ export function createTurnRuntime(client: PluginClientContext, inline = false): 
         if (!key) return undefined;
         if (!role) {
           // An invisible renderer learns the viewed agent through public props.
-          // The final answer always stays native, including before the index loads.
-          if (item.type === "assistant_message" || known.has(key) || unavailableSources.has(key)) return undefined;
-          return { items: [{ type: "plugin", kind: "turn-bootstrap", version: 1, data: { key } }] };
+          // Do not briefly expose live progress while its owning turn is loading.
+          // An indexed final answer or a failed/out-of-window source stays native.
+          if (known.has(key) || unavailableSources.has(key)) return undefined;
+          const source = item.type === "tool_call" ? `${item.name ?? "Tool call"}\n${JSON.stringify(item.detail ?? {}, null, 2)}`
+            : item.type === "todo" ? JSON.stringify(item.items ?? [], null, 2) : item.text ?? "";
+          return { items: [{ type: "plugin", kind: "turn-bootstrap", version: 1, data: { key, source } }] };
         }
         if (!role.anchors.length) return role.hidden ? { items: [] } : undefined;
         const source = item.type === "tool_call" ? `${item.name ?? "Tool call"}\n${JSON.stringify(item.detail ?? {}, null, 2)}`
@@ -196,7 +199,7 @@ export function createTurnRuntime(client: PluginClientContext, inline = false): 
   }
   rebuild();
   return { inline, mount, refresh, getIndex: id => indexes.get(id),
-    noteSource: (agentId, key) => { sourceAgents.set(key, agentId); },
+    noteSource: (agentId, key, at) => { sourceAgents.set(key, { agentId, at }); },
     toggle, isExpanded: id => expanded.has(id), subscribe, readProcess,
     cachedProcess: (agentId, groupId) => processCache.get(JSON.stringify([agentId, groupId]))?.page, anchor, dispose };
 }
