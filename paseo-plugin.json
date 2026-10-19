@@ -1,0 +1,15 @@
+{
+  "id": "paseo-results-first",
+  "name": "Paseo · 结果优先",
+  "requirements": {
+    "paseo": ">=0.11.4 <0.11.5"
+  },
+  "build": [
+    [
+      "npm",
+      "ci",
+      "--include=dev",
+      "--ignore-scripts"
+    ]
+  ]
+}

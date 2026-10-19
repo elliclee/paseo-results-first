@@ -1,0 +1,15 @@
+node_modules
+dist/
+*.tsbuildinfo
+.showcase/showcase.js
+.showcase/tools/collect.cjs
+.worktrees/
+.showcase/replay.js
+.showcase/out/
+.agents/
+
+
+.env
+.env.*
+*.log
+.DS_Store

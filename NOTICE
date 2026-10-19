@@ -1,0 +1,14 @@
+Paseo Results First
+
+This distribution contains source derived from:
+
+- ABorakati/beautiful-chat, copyright (c) 2026 ABorakati, MIT License.
+- RoundRedDot/better-paseo, source revision 008fbfd.
+  https://github.com/RoundRedDot/better-paseo
+- Daaaaave/paseo-fold-turns, source revision
+  72265853eb075a791d72f8142e559e11e215a952 (0.2.1), MIT License.
+  See docs/third-party/paseo-fold-turns-LICENSE.
+
+The upstream copyright notices and licenses are preserved. This is an
+independent distribution maintained by elliclee; the upstream maintainers
+are not represented as authors of this distribution's new commits.
