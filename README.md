@@ -1,6 +1,6 @@
 # Paseo · 结果优先
 
-少看过程，突出结果。每轮的工具调用、思考和中途播报默认收起为一个「查看过程」入口，最终回复继续使用 Paseo 原生展示。
+少看过程，突出结果。每轮的工具调用和思考默认收起为一个「查看过程」入口，进度播报与最终回复继续使用 Paseo 原生展示。
 
 这是基于 [Better Paseo](https://github.com/RoundRedDot/better-paseo) 的独立试用版，加入整轮折叠与回复后的额度快照。
 
@@ -9,7 +9,7 @@
 首版限定 **Paseo 0.11.4**；实际界面验证环境为 macOS 桌面端。运行 Paseo daemon 的机器需要 Git、Node.js 22 或更高版本和 npm，安装时会自动准备依赖。
 
 ```sh
-paseo plugin install git:elliclee/paseo-results-first --ref v0.1.0
+paseo plugin install git:elliclee/paseo-results-first --ref v0.1.1
 ```
 
 也可在「设置 → 插件」的安装入口输入 `git:elliclee/paseo-results-first`。
@@ -27,9 +27,9 @@ paseo plugin disable better-paseo
 ## 展示效果
 
 - 每轮只有正文中的一个过程入口，点击原位展开、再点收起。
-- 用户提问和最终回复保持原生展示，保留 Markdown、图表、图片、文件链接及原生操作。
+- 用户提问、进度播报和最终回复保持原生展示，保留 Markdown、图表、图片、文件链接及原生操作。
 - 待回答问题、权限请求及会话错误保持可见；运行中自行处理的命令失败记录收在过程内。
-- 运行中统一显示「正在处理…」，工具、思考和中途播报从出现时即收起；完成后展示最终回复。
+- 工具与思考统一收进「正在处理…」入口；进度播报中的参数、测试数量和风险说明始终可见，完成后继续保留，不重复收入过程。
 - 字体和字号跟随 Paseo。
 
 在新完成回复的耗时后追加额度快照，例如：

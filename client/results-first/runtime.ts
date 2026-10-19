@@ -3,7 +3,8 @@ import { indexRpc, processRpc, type ProcessPage } from "../../shared/results-fir
 import { compactionSignature, itemKey, projectIndexes, type CompactionTarget, type Item, type Role, type TurnIndex } from "../../shared/results-first/model";
 import type { NativeFoldChange } from "../../shared/results-first/native-anchor";
 
-const TYPES = ["assistant_message", "reasoning", "tool_call", "compaction", "todo"] as const;
+// Keep all user-facing progress and final text in the native timeline.
+const TYPES = ["reasoning", "tool_call", "compaction", "todo"] as const;
 const displayAnchors = (anchors: Role["anchors"]) => anchors.map(({ agentId, expanded, group: { id, at, tools, messages, thinking, compactions, kinds, running, todos } }) => ({ agentId, expanded, group: { id, at, tools, messages, thinking, compactions, kinds, ...(running ? { running } : {}), ...(todos ? { todos } : {}) } }));
 export interface TurnRuntime {
   readonly inline: boolean;
@@ -175,8 +176,8 @@ export function createTurnRuntime(client: PluginClientContext, inline = false): 
         if (!key) return undefined;
         if (!role) {
           // An invisible renderer learns the viewed agent through public props.
-          // Do not briefly expose live progress while its owning turn is loading.
-          // An indexed final answer or a failed/out-of-window source stays native.
+          // Keep technical detail folded while its owning turn is loading.
+          // A protected or out-of-window source stays native.
           if (known.has(key) || unavailableSources.has(key)) return undefined;
           const source = item.type === "tool_call" ? `${item.name ?? "Tool call"}\n${JSON.stringify(item.detail ?? {}, null, 2)}`
             : item.type === "todo" ? JSON.stringify(item.items ?? [], null, 2) : item.text ?? "";

@@ -106,8 +106,7 @@ describe("results-first disclosure", () => {
     const stop = contribute(client);
     await Promise.resolve();
     const tool = () => transforms.get("tool_call")!.transform({ item: rows[1]!.item, phase: "complete" });
-    const final = () => transforms.get("assistant_message")!.transform({ item: rows[2]!.item, phase: "complete" });
-    expect(final()).toMatchObject({ items: [{ kind: "turn-bootstrap" }] });
+    expect(transforms.has("assistant_message")).toBe(false);
     const bootstrap = tool()!.items[0]!;
     expect(bootstrap).toMatchObject({ kind: "turn-bootstrap" });
     const props = { agentId: "a", timestamp: new Date(1000), host: { id: "local", label: "Local" },
@@ -117,7 +116,7 @@ describe("results-first disclosure", () => {
       expect(renderer!.toJSON()).toBeNull();
       expect(rpc).toHaveBeenCalledWith(indexRpc, { agentId: "a" });
       await act(async () => resolveIndex(index));
-      expect(final()).toBeUndefined();
+      expect(transforms.has("assistant_message")).toBe(false);
       expect(tool()!.items[0]).toMatchObject({ kind: "turn-disclosure" });
       await act(async () => renderer!.update(React.createElement(renderers.get("turn-disclosure")!.Component, { ...props, item: tool()!.items[0] })));
       expect(renderer!.root.find(node => (node.type as unknown) === "Text").children).toEqual(["查看过程"]);

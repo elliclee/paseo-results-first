@@ -19,37 +19,53 @@ const source: Item[] = [
 ];
 
 describe("results-first turn projection", () => {
-  it("replaces the entire completed process with one disclosure and leaves the final answer native", () => {
+  it("folds technical detail and keeps both progress and the final answer native", () => {
     const index = indexTurns("agent", "epoch", entries(source), idle);
     expect(index.groups).toHaveLength(1);
     const group = index.groups[0]!;
-    expect([group.tools, group.messages, group.thinking]).toEqual([3, 1, 1]);
-    expect(summary(group, "zh")).toBe("执行记录 · 5 项");
+    expect([group.tools, group.messages, group.thinking]).toEqual([3, 0, 1]);
+    expect(summary(group, "zh")).toBe("执行记录 · 4 项");
     const roles = projectIndexes([index], new Set());
-    expect(roles.size).toBe(5);
-    expect(roles.get("a:progress")?.anchors).toHaveLength(1);
+    expect(roles.size).toBe(4);
+    expect(roles.has("a:progress")).toBe(false);
+    expect(roles.get(itemKey(source[2]!)!)?.anchors).toHaveLength(1);
     expect(roles.has("a:final")).toBe(false);
     expect(roles.has(itemKey(source[0]!)!)).toBe(false);
   });
 
-  it("folds live tools and progress into the same running disclosure", () => {
+  it("folds live tools into one disclosure while keeping progress visible", () => {
     const rows = entries([...source.slice(0, -1), { type: "tool_call", callId: "active", name: "exec_command", status: "running" }]);
     const index = indexTurns("agent", "epoch", rows, { ...idle, running: true, activeTurnId: "turn" });
     const group = index.groups[0]!;
     expect(group.running).toBe(true);
-    expect(summary(group, "zh")).toBe("正在处理 · 6 项");
+    expect(summary(group, "zh")).toBe("正在处理 · 5 项");
     const roles = projectIndexes([index], new Set());
     expect(roles.get("t:active")?.hidden).toBe(true);
-    expect(roles.get("a:progress")?.anchors).toHaveLength(1);
+    expect(roles.has("a:progress")).toBe(false);
+    expect(roles.get(itemKey(source[2]!)!)?.anchors).toHaveLength(1);
     expect([...roles.values()].flatMap(role => role.anchors)).toHaveLength(1);
     expect(roles.get("t:call-0")?.hidden).toBe(true);
     expect(processRows("agent", "epoch", rows, group).map(row => itemKey(row.item))).toEqual(group.keys);
   });
 
-  it("holds streaming text in the process and releases the native final answer on completion", () => {
-    const index = indexTurns("agent", "epoch", entries(source), { ...idle, running: true });
-    expect(projectIndexes([index], new Set()).get("a:final")?.hidden).toBe(true);
-    expect(projectIndexes([indexTurns("agent", "epoch", entries(source), idle)], new Set()).has("a:final")).toBe(false);
+  it("keeps progress parameters visible through execution, completion and expansion without duplicating them", () => {
+    const progress: Item = { type: "assistant_message", messageId: "metrics",
+      text: "在补测试（GLM 降级时温度压到 1.0、DeepSeek 照常 1.4），然后用 pro 跑 4 条小样看格式。" };
+    const rows = entries([...source.slice(0, -1), progress, source.at(-1)!]);
+    for (const running of [true, false]) {
+      const index = indexTurns("agent", "epoch", rows, { ...idle, running });
+      const group = index.groups[0]!;
+      for (const expanded of [new Set<string>(), new Set([group.id])]) {
+        const roles = projectIndexes([index], expanded);
+        for (const key of ["a:progress", "a:metrics", "a:final"]) expect(roles.has(key)).toBe(false);
+      }
+      expect(processRows("agent", "epoch", rows, group).every(row => row.item.type !== "assistant_message")).toBe(true);
+    }
+  });
+
+  it("does not add an empty process entry to a text-only turn", () => {
+    const rows = entries(source.filter(item => item.type.endsWith("_message")));
+    for (const running of [true, false]) expect(indexTurns("agent", "epoch", rows, { ...idle, running }).groups).toEqual([]);
   });
 
   it("keeps failed command details inside the process while the agent continues", async () => {
@@ -79,7 +95,7 @@ describe("results-first turn projection", () => {
     const index = indexTurns("agent", "epoch", rows, idle);
     const group = index.groups[0]!;
     expect(group.todos).toBe(1);
-    expect(summary(group, "zh")).toBe("执行记录 · 6 项");
+    expect(summary(group, "zh")).toBe("执行记录 · 5 项");
     expect(processRows("agent", "epoch", rows, group).some(row => row.item.type === "todo")).toBe(true);
   });
 
@@ -102,14 +118,15 @@ describe("results-first turn projection", () => {
     const index = indexTurns("agent", "epoch", entries(source), idle);
     const group = index.groups[0]!;
     const roles = projectIndexes([index], new Set([group.id]));
-    expect(roles.get("a:progress")?.anchors[0]?.expanded).toBe(true);
-    for (const item of source.slice(2, -1)) expect(roles.get(itemKey(item)!)?.hidden).toBe(false);
+    expect(roles.has("a:progress")).toBe(false);
+    expect(roles.get(group.anchor)?.anchors[0]?.expanded).toBe(true);
+    for (const item of source.slice(3, -1)) expect(roles.get(itemKey(item)!)?.hidden).toBe(false);
     expect(roles.has("a:final")).toBe(false);
   });
 
-  it("keeps turns and agents separate and protects a reused final identity", () => {
+  it("keeps turns and agents separate and protects a conflicting process identity", () => {
     const first = indexTurns("one", "epoch", entries(source), idle);
-    const second = indexTurns("two", "epoch", entries([{ type: "user_message" }, { type: "assistant_message", messageId: "progress", text: "其他对话的最终回复" }]), idle);
+    const second = indexTurns("two", "epoch", entries([{ type: "user_message" }, source[2]!, { type: "assistant_message", messageId: "other-final", text: "其他对话的最终回复" }]), { ...idle, failed: true });
     expect(projectIndexes([first, second], new Set()).size).toBe(0);
     const next = entries([{ type: "user_message", text: "下一轮" }, { type: "tool_call", callId: "next", status: "running" }], "next", 20);
     const index = indexTurns("one", "epoch", [...entries(source), ...next], { ...idle, running: true, activeTurnId: "next" });
@@ -182,8 +199,8 @@ describe("results-first runtime", () => {
       transforms.set(value.query.itemType, value); return () => { transforms.delete(value.query.itemType); };
     } } as unknown as Parameters<typeof createTurnRuntime>[0]);
     await runtime.refresh("agent");
-    expect(transforms.get("assistant_message")!.transform({ item: source.at(-1)!, phase: "complete" })).toBeUndefined();
-    expect(transforms.get("reasoning")!.transform({ item: source[2]!, phase: "streaming" })).toEqual({ items: [] });
+    expect(transforms.has("assistant_message")).toBe(false);
+    expect(transforms.get("reasoning")!.transform({ item: source[2]!, phase: "streaming" })).toMatchObject({ items: [{ kind: "turn-disclosure" }] });
     expect(transforms.get("tool_call")!.transform({ item: source[3]!, phase: "complete" })).toEqual({ items: [] });
     runtime.toggle(index.groups[0]!.id);
     expect(transforms.get("tool_call")!.transform({ item: source[3]!, phase: "complete" })).toBeUndefined();

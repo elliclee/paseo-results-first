@@ -101,7 +101,7 @@ export function turnSegments(entries: Entry[]): Entry[][] {
   return segments;
 }
 
-/** Keep live process behind one disclosure; release only the completed final reply. */
+/** Fold technical detail while progress updates and final replies stay native. */
 export function indexTurns(agentId: string, epoch: string, entries: Entry[], state: { running: boolean; activeTurnId?: string | null; pending: boolean; failed: boolean; hasOlder: boolean }): TurnIndex {
   const result: TurnIndex = { agentId, epoch, groups: [], protected: [] };
   const from = Date.parse(entries[0]?.timestamp ?? "");
@@ -126,15 +126,15 @@ export function indexTurns(agentId: string, epoch: string, entries: Entry[], sta
       for (const row of rows) { const key = keyOf(row); if (key) result.protected.push(key); }
       continue;
     }
-    // Live text stays in the same process group from its first appearance.
-    // Once the turn finishes, only its final message is released natively.
+    // Assistant messages are user-facing updates, including their parameters
+    // and results. Never move them into the fold, during or after execution.
     const candidates = busy ? rows : rows.slice(0, final);
     const process = candidates.filter(row => {
       const decision = row.item.type === "tool_call" && (/(?:^|[._:/-])(?:ask(?:_user_question)?|askuserquestion|request_user_input(?:_async)?|exitplanmode|enterplanmode)$/i.test(row.item.name ?? "") ||
         (row.item.detail as { type?: string } | undefined)?.type === "user_questions");
       // A command failure is process detail while the agent continues.
       // Actual turn errors, blocked permissions and failed agents stay native above.
-      return keyOf(row) && !decision;
+      return row.item.type !== "assistant_message" && keyOf(row) && !decision;
     });
     const folded = new Set(process);
     for (const row of rows) if (!folded.has(row)) { const key = keyOf(row); if (key) result.protected.push(key); }

@@ -1,6 +1,6 @@
 {
   "name": "paseo-results-first",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Paseo 结果优先：每轮过程默认折叠，保留原生回复，并显示额度快照。",
   "license": "MIT",
