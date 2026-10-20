@@ -1,6 +1,6 @@
 {
   "name": "paseo-results-first",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "description": "Paseo 原生回复显示 provider 额度快照，并隐藏 Thinking 整行。",
   "license": "MIT",

@@ -63,6 +63,38 @@ describe("session-scoped host bridge", () => {
     expect(getClient).toHaveBeenCalledWith("local");
     expect(listUsageReports).toHaveBeenCalledWith({ agentId: "one", forceRefresh: true });
   });
+  it.each([3767, 3761])("reads the owning agent through the supported module %s", async moduleId => {
+    const listUsageReports = vi.fn(async () => ({ reports: [report()] }));
+    const metro = vi.fn((id: number) => id === moduleId
+      ? { getHostRuntimeStore: () => ({ getClient: () => ({ listUsageReports }) }) }
+      : { unrelatedExport: true });
+    vi.stubGlobal("__r", metro);
+    expect(await readHostQuota(owner, true)).toEqual([report()]);
+    expect(listUsageReports).toHaveBeenCalledExactlyOnceWith({ agentId: "one", forceRefresh: true });
+    expect(metro.mock.calls.map(([id]) => id)).toEqual(moduleId === 3767 ? [3767] : [3767, 3761]);
+  });
+  it("supports an older build where the new module ID cannot load", async () => {
+    const listUsageReports = vi.fn(async () => ({ reports: [report()] }));
+    vi.stubGlobal("__r", (id: number) => {
+      if (id === 3767) throw new Error("Unknown module");
+      return { getHostRuntimeStore: () => ({ getClient: () => ({ listUsageReports }) }) };
+    });
+    expect(await readHostQuota(owner, false)).toEqual([report()]);
+    expect(listUsageReports).toHaveBeenCalledExactlyOnceWith({ agentId: "one", forceRefresh: false });
+  });
+  it("does not try another runtime or account when the owning host is disconnected", async () => {
+    const getClient = vi.fn(() => null);
+    const metro = vi.fn(() => ({ getHostRuntimeStore: () => ({ getClient }) }));
+    vi.stubGlobal("__r", metro);
+    await expect(readHostQuota(owner, true)).rejects.toThrow("bridge unavailable");
+    expect(metro).toHaveBeenCalledExactlyOnceWith(3767);
+    expect(getClient).toHaveBeenCalledExactlyOnceWith("local");
+  });
+  it("rejects builds whose known modules do not export the host runtime", async () => {
+    vi.stubGlobal("__r", () => ({ unrelatedExport: true }));
+    await expect(readHostQuota(owner, true)).rejects.toThrow("bridge unavailable");
+  });
+
   it("does not use a global account report when the host bridge is missing", async () => {
     vi.stubGlobal("__r", undefined);
     await expect(readHostQuota(owner, false)).rejects.toThrow("bridge unavailable");

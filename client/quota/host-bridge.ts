@@ -6,7 +6,7 @@ interface Fiber { memoizedProps?: { serverId?: unknown; agentId?: unknown; compl
 interface UsageClient { listUsageReports(input: { agentId: string; forceRefresh: boolean }): Promise<{ reports: QuotaReport[] }> }
 interface HostRuntimeModule { getHostRuntimeStore?: () => { getClient(serverId: string): UsageClient | null } }
 
-/** Read-only bridge for this local Paseo 0.11.4 build, outside the plugin SDK. */
+/** Read-only bridge for the verified desktop builds, outside the plugin SDK. */
 export function footerIdentity(element: object): FooterIdentity | null {
   const key = Object.keys(element).find(key => key.startsWith("__reactFiber$"));
   let fiber = key ? (element as Record<string, Fiber>)[key] : undefined;
@@ -26,8 +26,14 @@ export function footerIdentity(element: object): FooterIdentity | null {
 }
 export async function readHostQuota(owner: FooterOwner, forceRefresh: boolean): Promise<QuotaReport[]> {
   const metro = (globalThis as { __r?: (id: number) => unknown }).__r;
-  // 3761 is host-runtime/store in the installed 0.11.4 web/desktop bundle.
-  const module = typeof metro === "function" ? metro(3761) as HostRuntimeModule : null;
+  // Known host-runtime/store IDs: 0.12.0 -> 3767; 0.11.4 -> 3761.
+  // Inspect exports because the app build owns module IDs, not the daemon.
+  let module: HostRuntimeModule | null = null;
+  if (typeof metro === "function") for (const id of [3767, 3761]) {
+    let candidate: HostRuntimeModule | null;
+    try { candidate = metro(id) as HostRuntimeModule | null; } catch { continue; }
+    if (typeof candidate?.getHostRuntimeStore === "function") { module = candidate; break; }
+  }
   const client = typeof module?.getHostRuntimeStore === "function" ? module.getHostRuntimeStore().getClient(owner.serverId) : null;
   if (typeof client?.listUsageReports !== "function") throw new Error("Quota footer host bridge unavailable");
   return (await client.listUsageReports({ agentId: owner.agentId, forceRefresh })).reports;
